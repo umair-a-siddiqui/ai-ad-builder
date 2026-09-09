@@ -1,0 +1,20 @@
+.env
+.venv/
+__pycache__/
+*.pyc
+.pytest_cache/
+.vscode/
+.idea/
+.DS_Store
+
+# Development backups and tests
+*_backup.py
+*_before_*.py
+test_*.py
+cloudflare_test.*
+perfume.jpg
+perfume_removed.png
+
+# Frontend
+frontend/node_modules/
+frontend/dist/
