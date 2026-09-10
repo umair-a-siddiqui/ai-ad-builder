@@ -1383,8 +1383,8 @@ def remove_product_background(image):
             segmentation_image = image
 
             max_dimension = max(image.size)
-            if max_dimension > 1024:
-                scale = 1024 / max_dimension
+            if max_dimension > 512:
+                scale = 512 / max_dimension
                 segmentation_image = image.resize(
                     (
                         max(1, int(image.width * scale)),
