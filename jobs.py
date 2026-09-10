@@ -1313,38 +1313,52 @@ def has_meaningful_transparency(image):
 
 def simple_light_background_removal(image):
     image = image.convert("RGBA")
+    width, height = image.size
     pixels = image.load()
 
-    for y in range(image.height):
-        for x in range(image.width):
-            r, g, b, a = pixels[x, y]
+    visited = set()
+    stack = []
 
-            minimum = min(r, g, b)
-            maximum = max(r, g, b)
+    # Start from all outside edges
+    for x in range(width):
+        stack.append((x, 0))
+        stack.append((x, height - 1))
 
-            if minimum > 247:
-                pixels[x, y] = (r, g, b, 0)
+    for y in range(height):
+        stack.append((0, y))
+        stack.append((width - 1, y))
 
-            elif (
-                minimum > 218
-                and maximum - minimum < 28
-            ):
-                alpha = int(
-                    max(
-                        0,
-                        min(
-                            255,
-                            (247 - minimum) * 9,
-                        ),
-                    )
-                )
+    while stack:
+        x, y = stack.pop()
 
-                pixels[x, y] = (
-                    r,
-                    g,
-                    b,
-                    min(a, alpha),
-                )
+        if (x, y) in visited:
+            continue
+
+        if x < 0 or y < 0 or x >= width or y >= height:
+            continue
+
+        visited.add((x, y))
+
+        r, g, b, a = pixels[x, y]
+
+        minimum = min(r, g, b)
+        maximum = max(r, g, b)
+
+        # Detect white / gray checkerboard background
+        is_background = (
+            minimum > 165
+            and maximum - minimum < 45
+        )
+
+        if not is_background:
+            continue
+
+        pixels[x, y] = (r, g, b, 0)
+
+        stack.append((x + 1, y))
+        stack.append((x - 1, y))
+        stack.append((x, y + 1))
+        stack.append((x, y - 1))
 
     return image
 
