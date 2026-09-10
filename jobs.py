@@ -1371,6 +1371,19 @@ def _get_rembg_session():
 def remove_product_background(image):
     image = image.convert("RGBA")
 
+        # Railway/cloud mode: avoid heavy rembg model
+    if os.getenv("REDIS_URL") and not has_meaningful_transparency(image):
+        print("Cloud mode: using lightweight background removal...")
+        cleaned = simple_light_background_removal(image)
+
+        alpha = cleaned.getchannel("A")
+        bbox = alpha.getbbox()
+
+        if bbox:
+            cleaned = cleaned.crop(bbox)
+
+        return cleaned
+
     if has_meaningful_transparency(image):
         print("Meaningful product transparency detected.")
         cleaned = image
