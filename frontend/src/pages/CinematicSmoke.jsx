@@ -82,16 +82,20 @@ function CinematicSmoke({ onBack }) {
       }
 
       if (data.status === "finished") {
-        setJobStatus("finished");
-        setMessage("Your cinematic advertisement is ready!");
-
-        if (data.result?.video_url) {
+        if (data.result?.success && data.result?.video_url) {
+          setJobStatus("finished");
+          setMessage("Your cinematic advertisement is ready!");
           setVideoUrl(data.result.video_url);
+        } else {
+          setJobStatus("failed");
+          setMessage(
+            data.result?.message ||
+            "Video generation failed. No video was returned."
+          );
         }
 
         return;
-      }
-
+  }
       if (data.status === "failed") {
         setJobStatus("failed");
         setMessage(data.error || "Cinematic video generation failed.");
