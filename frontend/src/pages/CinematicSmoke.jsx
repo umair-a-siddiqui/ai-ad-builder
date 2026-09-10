@@ -60,7 +60,7 @@ function CinematicSmoke({ onBack }) {
       await sleep(2000);
 
       const response = await fetch(
-        `http://127.0.0.1:8000/job-status/${jobId}`
+        `https://ai-ad-builder-production.up.railway.app/job-status/${jobId}`
       );
 
       if (!response.ok) {
@@ -125,7 +125,7 @@ function CinematicSmoke({ onBack }) {
       formData.append("product_image", productImage);
 
       const response = await fetch(
-        "http://127.0.0.1:8000/generate-cinematic-smoke",
+        "https://ai-ad-builder-production.up.railway.app/generate-cinematic-smoke",
         {
           method: "POST",
           body: formData,
@@ -633,4 +633,5 @@ function StudioPanel({ number, title, subtitle, children }) {
 }
 
 export default CinematicSmoke;
+
 

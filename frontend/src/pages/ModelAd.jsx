@@ -36,7 +36,7 @@ function ModelAd({ onBack }) {
       await sleep(2000);
 
       const response = await fetch(
-        `http://127.0.0.1:8000/job-status/${jobId}`
+        `https://ai-ad-builder-production.up.railway.app/job-status/${jobId}`
       );
 
       if (!response.ok) {
@@ -102,7 +102,7 @@ function ModelAd({ onBack }) {
       formData.append("product_image", productImage);
 
       const response = await fetch(
-        "http://127.0.0.1:8000/generate-model-ad",
+        "https://ai-ad-builder-production.up.railway.app/generate-model-ad",
         {
           method: "POST",
           body: formData,

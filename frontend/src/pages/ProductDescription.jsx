@@ -61,7 +61,7 @@ function ProductDescription({ onBack }) {
       formData.append("tone", tone);
 
       const response = await fetch(
-        "http://127.0.0.1:8000/generate-description",
+        "https://ai-ad-builder-production.up.railway.app/generate-description",
         {
           method: "POST",
           body: formData,
