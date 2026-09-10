@@ -1387,86 +1387,40 @@ def remove_product_background(image):
 
         # Railway/cloud mode: avoid heavy rembg model
     if os.getenv("REDIS_URL") and not has_meaningful_transparency(image):
-        print("Cloud mode: using lightweight background removal...")
-        cleaned = simple_light_background_removal(image)
+        print("Cloud mode: fast lightweight background removal...")
 
-        alpha = cleaned.getchannel("A")
-        bbox = alpha.getbbox()
+    original_size = image.size
 
-        if bbox:
-            cleaned = cleaned.crop(bbox)
+    max_dimension = max(image.size)
 
-        return cleaned
-
-    if has_meaningful_transparency(image):
-        print("Meaningful product transparency detected.")
-        cleaned = image
-
+    if max_dimension > 384:
+        scale = 384 / max_dimension
+        small = image.resize(
+            (
+                max(1, int(image.width * scale)),
+                max(1, int(image.height * scale)),
+            ),
+            Image.Resampling.BILINEAR,
+        )
     else:
-        try:
-            print("Running cached rembg segmentation...")
+        small = image.copy()
 
-            original_size = image.size
-            segmentation_image = image
+    cleaned_small = simple_light_background_removal(small)
 
-            max_dimension = max(image.size)
-            if max_dimension > 512:
-                scale = 512 / max_dimension
-                segmentation_image = image.resize(
-                    (
-                        max(1, int(image.width * scale)),
-                        max(1, int(image.height * scale)),
-                    ),
-                    Image.Resampling.LANCZOS,
-                )
+    alpha = cleaned_small.getchannel("A").resize(
+        original_size,
+        Image.Resampling.BILINEAR,
+    )
 
-            session = _get_rembg_session()
+    cleaned = image.copy()
+    cleaned.putalpha(alpha)
 
-            cleaned = remove(
-                segmentation_image,
-                session=session,
-            )
-
-            if isinstance(cleaned, bytes):
-                cleaned = Image.open(
-                    io.BytesIO(cleaned)
-                ).convert("RGBA")
-            else:
-                cleaned = cleaned.convert("RGBA")
-
-            # If segmentation was downsized, scale the alpha mask back
-            # and apply it to the original-resolution product.
-            if cleaned.size != original_size:
-                alpha = cleaned.getchannel("A").resize(
-                    original_size,
-                    Image.Resampling.LANCZOS,
-                )
-                cleaned = image.copy()
-                cleaned.putalpha(alpha)
-
-            # Validate the cutout so an opaque white rectangle is not accepted.
-            if not has_meaningful_transparency(cleaned):
-                print("Cutout validation failed; trying light-background fallback...")
-                fallback = simple_light_background_removal(image)
-
-                if has_meaningful_transparency(fallback):
-                    cleaned = fallback
-                    print("Light-background fallback accepted.")
-                else:
-                    print("Fallback did not improve the cutout; keeping rembg result.")
-
-            print("Background removal complete.")
-
-        except Exception as error:
-            print("rembg failed:", error)
-            cleaned = simple_light_background_removal(image)
-
-    alpha = cleaned.getchannel("A")
-    bbox = alpha.getbbox()
+    bbox = cleaned.getchannel("A").getbbox()
 
     if bbox:
         cleaned = cleaned.crop(bbox)
 
+    print("Cloud background removal complete.")
     return cleaned
 
 
