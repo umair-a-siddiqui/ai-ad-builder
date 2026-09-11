@@ -9,13 +9,16 @@ app = FastAPI(title="AI Ad Builder API", version="1.1.0")
 
 job_store = {}
 
+from fastapi.middleware.cors import CORSMiddleware
+
 app.add_middleware(
     CORSMiddleware,
     allow_origins=[
-        "http://localhost:5173",
         "https://ai-ad-builder-eight.vercel.app",
+        "http://localhost:5173",
+        "http://localhost:3000",
+        "*"
     ],
-    allow_origin_regex=r"^https://([a-zA-Z0-9-]+\.)*vercel\.app$",
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
