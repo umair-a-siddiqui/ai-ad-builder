@@ -117,22 +117,36 @@ def decode_product_image(image_data_uri):
     encoded = image_data_uri.split(",", 1)[1] if "," in image_data_uri else image_data_uri
     return Image.open(io.BytesIO(base64.b64decode(encoded))).convert("RGBA")
 
+import gc
+
 def _get_rembg_session():
     global _REMBG_SESSION
     if _REMBG_SESSION is None:
-        try: _REMBG_SESSION = new_session("isnet-general-use")
-        except Exception: _REMBG_SESSION = new_session("u2net")
+        from rembg import new_session
+        # Use u2netp (lightweight model designed for CPU/low memory)
+        try:
+            _REMBG_SESSION = new_session("u2netp")
+        except Exception:
+            _REMBG_SESSION = new_session("u2net")
     return _REMBG_SESSION
 
 def remove_product_background(image):
+    from rembg import remove
     image = image.convert("RGBA")
     try:
         cut_bytes = remove(image, session=_get_rembg_session())
         cut = Image.open(io.BytesIO(cut_bytes)).convert("RGBA") if isinstance(cut_bytes, bytes) else cut_bytes.convert("RGBA")
         alpha = cut.getchannel("A")
         bbox = alpha.point(lambda v: 255 if v > 15 else 0).getbbox()
-        if bbox: return cut.crop(bbox)
-    except Exception: pass
+        
+        # Immediately free RAM
+        gc.collect()
+        
+        if bbox:
+            return cut.crop(bbox)
+    except Exception as e:
+        print(f"Background removal skipped due to RAM: {e}")
+        gc.collect()
     return image
 
 def add_contact_shadow(canvas, product, x, y):
