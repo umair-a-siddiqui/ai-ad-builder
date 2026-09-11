@@ -1,4 +1,4 @@
-import removeBackground from "@imgly/background-removal";
+import { removeBackground } from "@imgly/background-removal";
 import { useEffect, useMemo, useState } from "react";
 import { motion } from "framer-motion";
 import {
