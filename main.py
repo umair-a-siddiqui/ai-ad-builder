@@ -9,7 +9,9 @@ app = FastAPI(title="AI Ad Builder API", version="1.1.0")
 
 job_store = {}
 
-from fastapi.middleware.cors import CORSMiddleware
+# Reject huge uploads before they ever reach PIL — a 20MB phone photo
+# decoded to raw pixels can be 200MB+ in memory before any processing starts.
+MAX_UPLOAD_BYTES = 8 * 1024 * 1024  # 8 MB
 
 app.add_middleware(
     CORSMiddleware,
@@ -24,11 +26,12 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+
 def run_poster_task_in_background(
-    job_id: str, 
-    poster_style: str, 
-    format: str, 
-    prompt: str, 
+    job_id: str,
+    poster_style: str,
+    format: str,
+    prompt: str,
     image_data_uri: str,
     headline: str = None,
     tagline: str = None,
@@ -37,9 +40,9 @@ def run_poster_task_in_background(
     try:
         job_store[job_id] = {"status": "started", "result": None}
         result = generate_poster_job(
-            poster_style, 
-            format, 
-            prompt, 
+            poster_style,
+            format,
+            prompt,
             image_data_uri,
             headline=headline,
             tagline=tagline,
@@ -49,13 +52,16 @@ def run_poster_task_in_background(
     except Exception as error:
         job_store[job_id] = {"status": "failed", "error": str(error)}
 
+
 @app.get("/")
 def home():
     return {"success": True, "message": "AI Ad Builder API is running!"}
 
+
 @app.get("/health")
 def health():
     return {"success": True, "mode": "Direct Async (No Redis)"}
+
 
 @app.get("/job-status/{job_id}")
 def job_status(job_id: str):
@@ -70,6 +76,7 @@ def job_status(job_id: str):
         return {"success": False, "job_id": job_id, "status": "failed", "error": job.get("error", "Generation failed.")}
 
     return {"success": True, "job_id": job_id, "status": status}
+
 
 @app.post("/generate-premium-poster")
 async def generate_premium_poster(
@@ -86,6 +93,12 @@ async def generate_premium_poster(
         image_bytes = await product_image.read()
         if not image_bytes:
             return {"success": False, "error": "Product image is required."}
+
+        if len(image_bytes) > MAX_UPLOAD_BYTES:
+            return {
+                "success": False,
+                "error": f"Image too large ({len(image_bytes) // 1024}KB). Please upload an image under 8MB.",
+            }
 
         image_base64 = base64.b64encode(image_bytes).decode("utf-8")
         content_type = product_image.content_type or "image/jpeg"
@@ -111,6 +124,9 @@ async def generate_premium_poster(
     except Exception as error:
         return {"success": False, "error": str(error)}
 
+
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 10000))
-    uvicorn.run("main:app", host="0.0.0.0", port=port)
+    # Keep this at a single worker/process on Render's free tier — each
+    # extra worker duplicates the whole app's memory footprint.
+    uvicorn.run("main:app", host="0.0.0.0", port=port, workers=1)

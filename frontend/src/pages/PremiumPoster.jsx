@@ -14,6 +14,50 @@ import {
 // Production FastAPI Backend Endpoint
 const API_BASE_URL = "https://ai-ad-builder.onrender.com";
 
+// Resize/compress the image in the browser before it's ever uploaded.
+// A phone photo can be 4000px+ and several MB — sending that straight to
+// a small Render instance is what pushes it over its memory limit.
+function resizeImageFile(file, maxDimension = 1600, quality = 0.85) {
+  return new Promise((resolve, reject) => {
+    const img = new window.Image();
+    const reader = new FileReader();
+
+    reader.onload = (e) => {
+      img.onload = () => {
+        let { width, height } = img;
+
+        if (width > maxDimension || height > maxDimension) {
+          const scale = maxDimension / Math.max(width, height);
+          width = Math.round(width * scale);
+          height = Math.round(height * scale);
+        }
+
+        const canvas = document.createElement("canvas");
+        canvas.width = width;
+        canvas.height = height;
+        const ctx = canvas.getContext("2d");
+        ctx.drawImage(img, 0, 0, width, height);
+
+        canvas.toBlob(
+          (blob) => {
+            if (!blob) {
+              reject(new Error("Could not process image."));
+              return;
+            }
+            resolve(new File([blob], file.name, { type: "image/jpeg" }));
+          },
+          "image/jpeg",
+          quality
+        );
+      };
+      img.onerror = () => reject(new Error("Could not load image."));
+      img.src = e.target.result;
+    };
+    reader.onerror = () => reject(new Error("Could not read file."));
+    reader.readAsDataURL(file);
+  });
+}
+
 function PremiumPoster({ onBack }) {
   const [productImage, setProductImage] = useState(null);
 
@@ -51,11 +95,20 @@ function PremiumPoster({ onBack }) {
     return new Promise((resolve) => setTimeout(resolve, ms));
   }
 
-  const handleImageUpload = (event) => {
+  const handleImageUpload = async (event) => {
     const file = event.target.files?.[0];
     if (!file) return;
 
-    setProductImage(file);
+    setMessage("Preparing image...");
+    try {
+      const resized = await resizeImageFile(file);
+      setProductImage(resized);
+    } catch (err) {
+      console.error(err);
+      // Fall back to the original file if resizing fails for any reason.
+      setProductImage(file);
+    }
+
     setMessage("");
     setJobStatus("");
     setPosterUrl("");
@@ -138,6 +191,10 @@ function PremiumPoster({ onBack }) {
       const data = await response.json();
       console.log("Poster backend response:", data);
 
+      if (!data.success) {
+        throw new Error(data.error || "Backend rejected the request.");
+      }
+
       if (!data.job_id) {
         throw new Error("Backend did not return a job ID.");
       }
@@ -194,18 +251,15 @@ function PremiumPoster({ onBack }) {
         </div>
       </nav>
 
-      <main className="relative z-10 mx-auto max-w-7xl px-6 pb-24 pt-12 lg:px-8">
-        <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="mb-10">
-          <div className="mb-3 flex items-center gap-2 text-xs font-medium uppercase tracking-[0.25em] text-fuchsia-300/70">
-            <Sparkles size={14} />
-            Visual Campaign AI
-          </div>
-          <h1 className="max-w-3xl text-4xl font-bold tracking-[-0.035em] md:text-5xl">
-            Build a poster that makes your
-            <span className="bg-gradient-to-r from-fuchsia-300 via-purple-300 to-blue-300 bg-clip-text text-transparent">
-              {" "}product stand out.
-            </span>
+      <main className="relative z-10 mx-auto max-w-7xl px-6 py-10 lg:px-8">
+        <motion.div initial={{ opacity: 0, y: -10 }} animate={{ opacity: 1, y: 0 }} className="mb-8">
+          <h1 className="flex items-center gap-2 text-2xl font-bold">
+            <Sparkles className="text-fuchsia-300" size={22} />
+            Premium Poster Builder
           </h1>
+          <p className="mt-1 text-sm text-white/40">
+            Upload your product and let AI design a studio-quality ad campaign around it.
+          </p>
         </motion.div>
 
         <div className="grid gap-6 xl:grid-cols-[430px_1fr]">
