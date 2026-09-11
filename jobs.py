@@ -115,8 +115,20 @@ def decode_product_image(image_data_uri):
     return Image.open(io.BytesIO(base64.b64decode(encoded))).convert("RGBA")
 
 def remove_product_background(image):
-    # Image is pre-cleared by the frontend client browser
-    return image.convert("RGBA")
+    image = image.convert("RGBA")
+    data = image.getdata()
+    bg_r, bg_g, bg_b = image.getpixel((0, 0))[:3]
+    
+    new_data = []
+    for item in data:
+        r, g, b, a = item if len(item) == 4 else (*item, 255)
+        if (r > 235 and g > 235 and b > 235) or (abs(r - bg_r) < 22 and abs(g - bg_g) < 22 and abs(b - bg_b) < 22):
+            new_data.append((r, g, b, 0))
+        else:
+            new_data.append((r, g, b, a))
+            
+    image.putdata(new_data)
+    return image
 
 def add_contact_shadow(canvas, product, x, y):
     pw, ph = product.size
