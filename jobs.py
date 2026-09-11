@@ -241,9 +241,9 @@ def _video_fallback_background(width, height):
 def _make_background_variant(base, index):
     width, height = base.size
 
-    zooms = (1.00, 1.07, 1.14, 1.04)
-    offset_x = (0.00, -0.035, 0.045, 0.015)
-    offset_y = (0.00, 0.015, -0.025, 0.00)
+    zooms = (1.00, 1.10, 1.20, 1.06)
+    offset_x = (-0.025, 0.040, -0.050, 0.020)
+    offset_y = (0.015, -0.010, -0.035, 0.005)
 
     zoom = zooms[index]
     resized = base.resize(
@@ -367,15 +367,17 @@ def _compose_video_scene(base, product, width, height, scene_index, prompt):
     portrait = height > width
 
     if portrait:
-        scale_fractions = (0.30, 0.40, 0.54, 0.47)
-        max_height_fractions = (0.28, 0.38, 0.50, 0.44)
-        centers = (0.46, 0.54, 0.48, 0.53)
-        bottoms = (0.77, 0.79, 0.84, 0.80)
+        # More obvious cinematic progression:
+        # establishing -> medium -> hero close-up -> final branded hero
+        scale_fractions = (0.24, 0.36, 0.60, 0.48)
+        max_height_fractions = (0.24, 0.36, 0.58, 0.46)
+        centers = (0.43, 0.58, 0.50, 0.54)
+        bottoms = (0.75, 0.80, 0.87, 0.81)
     else:
-        scale_fractions = (0.24, 0.32, 0.42, 0.36)
-        max_height_fractions = (0.52, 0.62, 0.74, 0.67)
-        centers = (0.60, 0.66, 0.73, 0.70)
-        bottoms = (0.84, 0.85, 0.88, 0.86)
+        scale_fractions = (0.20, 0.30, 0.48, 0.38)
+        max_height_fractions = (0.46, 0.60, 0.80, 0.68)
+        centers = (0.56, 0.67, 0.76, 0.70)
+        bottoms = (0.82, 0.86, 0.90, 0.86)
 
     product_scene = _resize_video_product(
         product,
@@ -430,11 +432,11 @@ def _compose_video_scene(base, product, width, height, scene_index, prompt):
         subtitle = config["tagline"]
 
         headline_font = load_font(
-            46 if portrait else 42,
+            54 if portrait else 44,
             bold=True,
         )
         subtitle_font = load_font(
-            22 if portrait else 20,
+            26 if portrait else 21,
             bold=False,
         )
 
@@ -483,7 +485,7 @@ def _encode_video_with_ffmpeg(ffmpeg, scene_paths, output_path, width, height):
     fps = 24
     work_dir = os.path.dirname(output_path)
 
-    zoom_speeds = (0.00040, 0.00068, 0.00082, 0.00052)
+    zoom_speeds = (0.00055, 0.00085, 0.00105, 0.00065)
     pan_x = (
         "iw/2-(iw/zoom/2)",
         "iw/2-(iw/zoom/2)+6",
@@ -669,16 +671,14 @@ def generate_video_job(prompt, image_data_uri):
             return prepared
 
         def _prepare_environment():
-            env = _generate_video_environment(prompt)
-            if env is None:
-                return _video_fallback_background(width, height)
-
-            covered = cover_image(env, width, height)
-            try:
-                env.close()
-            except Exception:
-                pass
-            return covered
+            # HACKATHON-SAFE VIDEO BACKGROUND:
+            # Do NOT use an AI-generated environment for cinematic video.
+            # Image generators can hallucinate bottles/products in the
+            # background, which creates a duplicate behind the real product.
+            # The cinematic video instead uses our controlled abstract
+            # background, then adds smoke, lighting, shadows and particles
+            # around the ORIGINAL uploaded product.
+            return _video_fallback_background(width, height)
 
         # Product prep and Cloudflare request can safely overlap.
         stage = time.perf_counter()
