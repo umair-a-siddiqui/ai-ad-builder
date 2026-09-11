@@ -2,7 +2,7 @@ from fastapi import FastAPI, UploadFile, File, Form, BackgroundTasks
 from fastapi.middleware.cors import CORSMiddleware
 from jobs import generate_poster_job
 from dotenv import load_dotenv
-import os, base64, uuid
+import os, base64, uuid, uvicorn
 
 load_dotenv()
 app = FastAPI(title="AI Ad Builder API", version="1.1.0")
@@ -13,7 +13,7 @@ app.add_middleware(
     CORSMiddleware,
     allow_origins=[
         "http://localhost:5173",
-        "https://ai-ad-builder-eight.vercel.app",  # Your live Vercel URL
+        "https://ai-ad-builder-eight.vercel.app",
     ],
     allow_origin_regex=r"^https://([a-zA-Z0-9-]+\.)*vercel\.app$",
     allow_credentials=True,
@@ -58,7 +58,7 @@ def health():
 def job_status(job_id: str):
     job = job_store.get(job_id)
     if not job:
-        return {"success": False, "status": "not_found", "error": "Job ID not found."}
+        return {"success": False, "status": "not_found", "error": "Job ID not found or server restarted."}
 
     status = job.get("status")
     if status == "finished":
@@ -107,3 +107,7 @@ async def generate_premium_poster(
 
     except Exception as error:
         return {"success": False, "error": str(error)}
+
+if __name__ == "__main__":
+    port = int(os.environ.get("PORT", 10000))
+    uvicorn.run("main:app", host="0.0.0.0", port=port)
