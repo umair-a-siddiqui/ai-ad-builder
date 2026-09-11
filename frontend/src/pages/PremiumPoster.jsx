@@ -1,4 +1,3 @@
-import { removeBackground } from "@imgly/background-removal";
 import { useEffect, useMemo, useState } from "react";
 import { motion } from "framer-motion";
 import {
@@ -10,7 +9,6 @@ import {
   LoaderCircle,
   Layers3,
   ImagePlus,
-  Type,
 } from "lucide-react";
 
 // Production FastAPI Backend Endpoint
@@ -18,8 +16,6 @@ const API_BASE_URL = "https://ai-ad-builder.onrender.com";
 
 function PremiumPoster({ onBack }) {
   const [productImage, setProductImage] = useState(null);
-  const [processedBlob, setProcessedBlob] = useState(null); // Clean cutout stored here
-  const [isRemovingBg, setIsRemovingBg] = useState(false);
 
   const [posterStyle, setPosterStyle] = useState("Luxury");
   const [format, setFormat] = useState("Instagram Post");
@@ -39,10 +35,9 @@ function PremiumPoster({ onBack }) {
   const formats = ["Instagram Post", "Instagram Story", "Square", "Landscape"];
 
   const imagePreview = useMemo(() => {
-    if (processedBlob) return URL.createObjectURL(processedBlob);
-    if (productImage) return URL.createObjectURL(productImage);
-    return "";
-  }, [productImage, processedBlob]);
+    if (!productImage) return "";
+    return URL.createObjectURL(productImage);
+  }, [productImage]);
 
   useEffect(() => {
     return () => {
@@ -56,30 +51,14 @@ function PremiumPoster({ onBack }) {
     return new Promise((resolve) => setTimeout(resolve, ms));
   }
 
-  // Handle Client-Side Background Removal (0MB RAM load on Render)
-  const handleImageUpload = async (event) => {
+  const handleImageUpload = (event) => {
     const file = event.target.files?.[0];
     if (!file) return;
 
     setProductImage(file);
-    setProcessedBlob(null);
-    setMessage("Stripping background in browser...");
-    setIsRemovingBg(true);
+    setMessage("");
     setJobStatus("");
     setPosterUrl("");
-
-    try {
-      // Execute background removal directly in client WebAssembly engine
-      const blob = await removeBackground(file);
-      setProcessedBlob(blob);
-      setMessage("Product background cleanly removed!");
-    } catch (error) {
-      console.error("Browser background removal fallback triggered:", error);
-      setProcessedBlob(file); // Fallback to raw file if WebGL/WASM fails
-      setMessage("Ready with raw image.");
-    } finally {
-      setIsRemovingBg(false);
-    }
   };
 
   async function checkJobStatus(jobId) {
@@ -131,7 +110,7 @@ function PremiumPoster({ onBack }) {
     }
 
     setLoading(true);
-    setMessage("Sending pre-cleaned product to Render backend...");
+    setMessage("Sending product to Render backend...");
     setJobStatus("queued");
     setPosterUrl("");
 
@@ -140,9 +119,7 @@ function PremiumPoster({ onBack }) {
       formData.append("poster_style", posterStyle);
       formData.append("format", format);
       formData.append("prompt", prompt);
-      
-      // Pass client-cleared PNG blob (or raw image fallback)
-      formData.append("product_image", processedBlob || productImage);
+      formData.append("product_image", productImage);
 
       // Custom Text Fields
       formData.append("headline", headlineText);
@@ -245,12 +222,7 @@ function PremiumPoster({ onBack }) {
                 htmlFor="poster-product-upload"
                 className="group mt-5 flex min-h-[210px] cursor-pointer items-center justify-center overflow-hidden rounded-2xl border border-dashed border-white/10 bg-black/20 p-4 transition hover:border-fuchsia-400/40"
               >
-                {isRemovingBg ? (
-                  <div className="text-center">
-                    <LoaderCircle size={28} className="mx-auto animate-spin text-fuchsia-300" />
-                    <p className="mt-3 text-xs text-white/60">Removing background in browser...</p>
-                  </div>
-                ) : productImage ? (
+                {productImage ? (
                   <div className="w-full text-center">
                     <img src={imagePreview} alt="Uploaded product" className="mx-auto max-h-[170px] max-w-full rounded-xl object-contain" />
                     <p className="mt-3 text-xs text-white/30">Click to replace image</p>
@@ -383,7 +355,7 @@ function PremiumPoster({ onBack }) {
 
             <button
               onClick={generatePoster}
-              disabled={loading || isRemovingBg}
+              disabled={loading}
               className="mt-5 flex w-full items-center justify-center gap-2 rounded-2xl bg-gradient-to-r from-fuchsia-500 to-purple-500 px-5 py-4 text-sm font-semibold hover:scale-[1.01] disabled:opacity-50"
             >
               {loading ? <LoaderCircle size={18} className="animate-spin" /> : <WandSparkles size={17} />}
