@@ -1,3 +1,4 @@
+import removeBackground from "@imgly/background-removal";
 import { useEffect, useMemo, useState } from "react";
 import { motion } from "framer-motion";
 import {
@@ -12,16 +13,19 @@ import {
   Type,
 } from "lucide-react";
 
-// Local FastAPI Backend Endpoint
+// Production FastAPI Backend Endpoint
 const API_BASE_URL = "https://ai-ad-builder.onrender.com";
 
 function PremiumPoster({ onBack }) {
   const [productImage, setProductImage] = useState(null);
+  const [processedBlob, setProcessedBlob] = useState(null); // Clean cutout stored here
+  const [isRemovingBg, setIsRemovingBg] = useState(false);
+
   const [posterStyle, setPosterStyle] = useState("Luxury");
   const [format, setFormat] = useState("Instagram Post");
   const [prompt, setPrompt] = useState("");
 
-  // New Custom Ad Text State Variables
+  // Custom Ad Text State Variables
   const [headlineText, setHeadlineText] = useState("LEAVE AN IMPRESSION");
   const [taglineText, setTaglineText] = useState("A signature presence made to be remembered.");
   const [ctaText, setCtaText] = useState("DISCOVER MORE");
@@ -35,9 +39,10 @@ function PremiumPoster({ onBack }) {
   const formats = ["Instagram Post", "Instagram Story", "Square", "Landscape"];
 
   const imagePreview = useMemo(() => {
-    if (!productImage) return "";
-    return URL.createObjectURL(productImage);
-  }, [productImage]);
+    if (processedBlob) return URL.createObjectURL(processedBlob);
+    if (productImage) return URL.createObjectURL(productImage);
+    return "";
+  }, [productImage, processedBlob]);
 
   useEffect(() => {
     return () => {
@@ -50,6 +55,32 @@ function PremiumPoster({ onBack }) {
   function sleep(ms) {
     return new Promise((resolve) => setTimeout(resolve, ms));
   }
+
+  // Handle Client-Side Background Removal (0MB RAM load on Render)
+  const handleImageUpload = async (event) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+
+    setProductImage(file);
+    setProcessedBlob(null);
+    setMessage("Stripping background in browser...");
+    setIsRemovingBg(true);
+    setJobStatus("");
+    setPosterUrl("");
+
+    try {
+      // Execute background removal directly in client WebAssembly engine
+      const blob = await removeBackground(file);
+      setProcessedBlob(blob);
+      setMessage("Product background cleanly removed!");
+    } catch (error) {
+      console.error("Browser background removal fallback triggered:", error);
+      setProcessedBlob(file); // Fallback to raw file if WebGL/WASM fails
+      setMessage("Ready with raw image.");
+    } finally {
+      setIsRemovingBg(false);
+    }
+  };
 
   async function checkJobStatus(jobId) {
     while (true) {
@@ -71,7 +102,7 @@ function PremiumPoster({ onBack }) {
 
       if (data.status === "started") {
         setJobStatus("started");
-        setMessage("Creating your premium poster with local engine...");
+        setMessage("Creating your premium poster stage...");
       }
 
       if (data.status === "finished") {
@@ -100,7 +131,7 @@ function PremiumPoster({ onBack }) {
     }
 
     setLoading(true);
-    setMessage("Sending request to local Python backend...");
+    setMessage("Sending pre-cleaned product to Render backend...");
     setJobStatus("queued");
     setPosterUrl("");
 
@@ -109,9 +140,11 @@ function PremiumPoster({ onBack }) {
       formData.append("poster_style", posterStyle);
       formData.append("format", format);
       formData.append("prompt", prompt);
-      formData.append("product_image", productImage);
+      
+      // Pass client-cleared PNG blob (or raw image fallback)
+      formData.append("product_image", processedBlob || productImage);
 
-      // Append Custom Text Fields to Backend Body
+      // Custom Text Fields
       formData.append("headline", headlineText);
       formData.append("tagline", taglineText);
       formData.append("cta_text", ctaText);
@@ -179,7 +212,7 @@ function PremiumPoster({ onBack }) {
 
           <div className="hidden items-center gap-2 text-xs text-white/30 sm:flex">
             <div className="h-2 w-2 rounded-full bg-green-400" />
-            Local Studio Connected
+            Cloud API Active
           </div>
         </div>
       </nav>
@@ -206,21 +239,18 @@ function PremiumPoster({ onBack }) {
                 type="file"
                 accept="image/png,image/jpeg,image/webp"
                 className="hidden"
-                onChange={(event) => {
-                  const file = event.target.files?.[0];
-                  if (file) {
-                    setProductImage(file);
-                    setMessage("");
-                    setJobStatus("");
-                    setPosterUrl("");
-                  }
-                }}
+                onChange={handleImageUpload}
               />
               <label
                 htmlFor="poster-product-upload"
                 className="group mt-5 flex min-h-[210px] cursor-pointer items-center justify-center overflow-hidden rounded-2xl border border-dashed border-white/10 bg-black/20 p-4 transition hover:border-fuchsia-400/40"
               >
-                {productImage ? (
+                {isRemovingBg ? (
+                  <div className="text-center">
+                    <LoaderCircle size={28} className="mx-auto animate-spin text-fuchsia-300" />
+                    <p className="mt-3 text-xs text-white/60">Removing background in browser...</p>
+                  </div>
+                ) : productImage ? (
                   <div className="w-full text-center">
                     <img src={imagePreview} alt="Uploaded product" className="mx-auto max-h-[170px] max-w-full rounded-xl object-contain" />
                     <p className="mt-3 text-xs text-white/30">Click to replace image</p>
@@ -236,7 +266,6 @@ function PremiumPoster({ onBack }) {
               </label>
             </StudioPanel>
 
-            {/* NEW PANEL: Custom Poster Copy */}
             <StudioPanel number="02" title="Ad Copy & Text" subtitle="Customize poster overlay text">
               <div className="mt-4 space-y-3">
                 <div>
@@ -354,8 +383,8 @@ function PremiumPoster({ onBack }) {
 
             <button
               onClick={generatePoster}
-              disabled={loading}
-              className="mt-5 flex w-full items-center justify-center gap-2 rounded-2xl bg-gradient-to-r from-fuchsia-500 to-purple-500 px-5 py-4 text-sm font-semibold hover:scale-[1.01]"
+              disabled={loading || isRemovingBg}
+              className="mt-5 flex w-full items-center justify-center gap-2 rounded-2xl bg-gradient-to-r from-fuchsia-500 to-purple-500 px-5 py-4 text-sm font-semibold hover:scale-[1.01] disabled:opacity-50"
             >
               {loading ? <LoaderCircle size={18} className="animate-spin" /> : <WandSparkles size={17} />}
               {loading ? "Designing Your Poster..." : "Generate Premium Poster"}
