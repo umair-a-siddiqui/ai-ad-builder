@@ -8,7 +8,6 @@ import requests
 import shutil
 import subprocess
 import tempfile
-import gc
 from concurrent.futures import ThreadPoolExecutor
 
 from dotenv import load_dotenv
@@ -241,9 +240,9 @@ def _video_fallback_background(width, height):
 def _make_background_variant(base, index):
     width, height = base.size
 
-    zooms = (1.00, 1.10, 1.20, 1.06)
-    offset_x = (-0.025, 0.040, -0.050, 0.020)
-    offset_y = (0.015, -0.010, -0.035, 0.005)
+    zooms = (1.00, 1.07, 1.14, 1.04)
+    offset_x = (0.00, -0.035, 0.045, 0.015)
+    offset_y = (0.00, 0.015, -0.025, 0.00)
 
     zoom = zooms[index]
     resized = base.resize(
@@ -367,17 +366,15 @@ def _compose_video_scene(base, product, width, height, scene_index, prompt):
     portrait = height > width
 
     if portrait:
-        # More obvious cinematic progression:
-        # establishing -> medium -> hero close-up -> final branded hero
-        scale_fractions = (0.24, 0.36, 0.60, 0.48)
-        max_height_fractions = (0.24, 0.36, 0.58, 0.46)
-        centers = (0.43, 0.58, 0.50, 0.54)
-        bottoms = (0.75, 0.80, 0.87, 0.81)
+        scale_fractions = (0.30, 0.40, 0.54, 0.47)
+        max_height_fractions = (0.28, 0.38, 0.50, 0.44)
+        centers = (0.46, 0.54, 0.48, 0.53)
+        bottoms = (0.77, 0.79, 0.84, 0.80)
     else:
-        scale_fractions = (0.20, 0.30, 0.48, 0.38)
-        max_height_fractions = (0.46, 0.60, 0.80, 0.68)
-        centers = (0.56, 0.67, 0.76, 0.70)
-        bottoms = (0.82, 0.86, 0.90, 0.86)
+        scale_fractions = (0.24, 0.32, 0.42, 0.36)
+        max_height_fractions = (0.52, 0.62, 0.74, 0.67)
+        centers = (0.60, 0.66, 0.73, 0.70)
+        bottoms = (0.84, 0.85, 0.88, 0.86)
 
     product_scene = _resize_video_product(
         product,
@@ -432,11 +429,11 @@ def _compose_video_scene(base, product, width, height, scene_index, prompt):
         subtitle = config["tagline"]
 
         headline_font = load_font(
-            54 if portrait else 44,
+            46 if portrait else 42,
             bold=True,
         )
         subtitle_font = load_font(
-            26 if portrait else 21,
+            22 if portrait else 20,
             bold=False,
         )
 
@@ -473,19 +470,27 @@ def _compose_video_scene(base, product, width, height, scene_index, prompt):
 
 
 def _encode_video_with_ffmpeg(ffmpeg, scene_paths, output_path, width, height):
-    """
-    Railway-safe cinematic encoder.
-
-    Important difference from the old V5 encoder:
-    each scene is rendered separately, so FFmpeg never keeps four image
-    inputs and four zoompan filter chains in memory at the same time.
-    This greatly reduces peak RAM while preserving cinematic motion.
-    """
     scene_duration = 2.5
     fps = 24
-    work_dir = os.path.dirname(output_path)
 
-    zoom_speeds = (0.00055, 0.00085, 0.00105, 0.00065)
+    command = [ffmpeg, "-y"]
+
+    for path in scene_paths:
+        command.extend(
+            [
+                "-loop",
+                "1",
+                "-framerate",
+                str(fps),
+                "-t",
+                str(scene_duration),
+                "-i",
+                path,
+            ]
+        )
+
+    filters = []
+    zoom_speeds = (0.00040, 0.00068, 0.00082, 0.00052)
     pan_x = (
         "iw/2-(iw/zoom/2)",
         "iw/2-(iw/zoom/2)+6",
@@ -499,18 +504,16 @@ def _encode_video_with_ffmpeg(ffmpeg, scene_paths, output_path, width, height):
         "ih/2-(ih/zoom/2)",
     )
 
-    # Work at 75% resolution inside zoompan, then scale once to output.
     zoom_width = max(2, (int(width * 0.75) // 2) * 2)
     zoom_height = max(2, (int(height * 0.75) // 2) * 2)
 
-    clip_paths = []
-
-    for i, scene_path in enumerate(scene_paths):
-        clip_path = os.path.join(work_dir, f"clip_{i + 1}.mp4")
-
-        vf = (
+    for i in range(4):
+        filters.append(
+            f"[{i}:v]"
             f"scale={width}:{height}:force_original_aspect_ratio=increase,"
             f"crop={width}:{height},"
+            # Shrink before zoompan so it has far fewer pixels to process
+            # per frame (zoompan is a slow, frame-by-frame CPU filter).
             f"scale={zoom_width}:{zoom_height},"
             f"zoompan="
             f"z='min(zoom+{zoom_speeds[i]},1.045)':"
@@ -519,75 +522,58 @@ def _encode_video_with_ffmpeg(ffmpeg, scene_paths, output_path, width, height):
             f"d=1:"
             f"s={zoom_width}x{zoom_height}:"
             f"fps={fps},"
+            # Scale back up to the real output size once, after zoompan.
             f"scale={width}:{height},"
             f"trim=duration={scene_duration},"
-            f"setpts=PTS-STARTPTS,"
-            f"format=yuv420p"
+            f"setpts=PTS-STARTPTS[v{i}]"
         )
 
-        command = [
-            ffmpeg,
-            "-y",
-            "-loop", "1",
-            "-framerate", str(fps),
-            "-t", str(scene_duration),
-            "-i", scene_path,
-            "-vf", vf,
-            "-an",
-            "-c:v", "libx264",
-            "-preset", "ultrafast",
-            "-crf", "21",
-            "-threads", "1",
-            "-movflags", "+faststart",
-            clip_path,
+    filters.append(
+        "[v0][v1][v2][v3]"
+        "concat=n=4:v=1:a=0[outv]"
+    )
+
+    command.extend(
+        [
+            "-filter_complex",
+            ";".join(filters),
+            "-map",
+            "[outv]",
+            "-t",
+            "10",
+            "-r",
+            str(fps),
+            "-c:v",
+            "libx264",
+            "-preset",
+            "ultrafast",
+            "-crf",
+            "20",
+            "-threads",
+            "0",
+            "-pix_fmt",
+            "yuv420p",
+            "-movflags",
+            "+faststart",
+            output_path,
         ]
-
-        result = subprocess.run(
-            command,
-            stdout=subprocess.DEVNULL,
-            stderr=subprocess.PIPE,
-            text=True,
-            creationflags=subprocess.CREATE_NO_WINDOW if os.name == "nt" else 0,
-            timeout=120,
-        )
-
-        if result.returncode != 0:
-            raise RuntimeError(
-                f"FFmpeg scene {i + 1} failed: " + result.stderr[-1200:]
-            )
-
-        clip_paths.append(clip_path)
-
-    concat_file = os.path.join(work_dir, "clips_concat.txt")
-    with open(concat_file, "w", encoding="utf-8") as handle:
-        for clip_path in clip_paths:
-            normalized = clip_path.replace("\\", "/")
-            handle.write(f"file '{normalized}'\n")
-
-    concat_command = [
-        ffmpeg,
-        "-y",
-        "-f", "concat",
-        "-safe", "0",
-        "-i", concat_file,
-        "-c", "copy",
-        "-movflags", "+faststart",
-        output_path,
-    ]
+    )
 
     result = subprocess.run(
-        concat_command,
-        stdout=subprocess.DEVNULL,
+        command,
+        stdout=subprocess.PIPE,
         stderr=subprocess.PIPE,
         text=True,
         creationflags=subprocess.CREATE_NO_WINDOW if os.name == "nt" else 0,
-        timeout=60,
+        timeout=180,
     )
 
     if result.returncode != 0:
         raise RuntimeError(
-            "FFmpeg concat failed: " + result.stderr[-1200:]
+            "FFmpeg render failed: "
+            + result.stderr[-1600:]
         )
+
 
 def _encode_static_video_fallback(ffmpeg, scene_paths, output_path, width, height):
     concat_file = os.path.join(os.path.dirname(output_path), "fallback_concat.txt")
@@ -647,13 +633,11 @@ def generate_video_job(prompt, image_data_uri):
 
     print("")
     print("======================================")
-    print("AI AD BUILDER - CINEMATIC V5 RAILWAY SAFE")
+    print("AI AD BUILDER - CINEMATIC V5 FAST")
     print("Prompt:", prompt)
     print("======================================")
 
     temp_dir = None
-    product = None
-    base = None
 
     try:
         width, height = _video_dimensions(prompt)
@@ -671,20 +655,20 @@ def generate_video_job(prompt, image_data_uri):
             return prepared
 
         def _prepare_environment():
-            # HACKATHON-SAFE VIDEO BACKGROUND:
-            # Do NOT use an AI-generated environment for cinematic video.
-            # Image generators can hallucinate bottles/products in the
-            # background, which creates a duplicate behind the real product.
-            # The cinematic video instead uses our controlled abstract
-            # background, then adds smoke, lighting, shadows and particles
-            # around the ORIGINAL uploaded product.
-            return _video_fallback_background(width, height)
+            env = _generate_video_environment(prompt)
+            if env is None:
+                return _video_fallback_background(width, height)
+            return cover_image(env, width, height)
 
-        # Product prep and Cloudflare request can safely overlap.
+        # These two steps don't depend on each other (one processes your
+        # product photo, the other calls Cloudflare for a background), so
+        # running them at the same time instead of one-after-another saves
+        # whichever one is faster from being pure wasted wait time.
         stage = time.perf_counter()
         with ThreadPoolExecutor(max_workers=2) as pool:
             product_future = pool.submit(_prepare_product)
             environment_future = pool.submit(_prepare_environment)
+
             product = product_future.result()
             base = environment_future.result()
 
@@ -693,50 +677,34 @@ def generate_video_job(prompt, image_data_uri):
         if product.width < 5 or product.height < 5:
             raise RuntimeError("Product extraction produced an empty image.")
 
+        stage = time.perf_counter()
+
+        # The 4 scenes don't depend on each other either, so build them
+        # at the same time instead of one after another.
+        with ThreadPoolExecutor(max_workers=4) as pool:
+            scenes = list(
+                pool.map(
+                    lambda index: _compose_video_scene(
+                        base,
+                        product,
+                        width,
+                        height,
+                        index,
+                        prompt,
+                    ),
+                    range(4),
+                )
+            )
+
+        _video_log("Scene composition (parallel)", stage)
+
         temp_dir = tempfile.mkdtemp(prefix="ai_ad_builder_video_")
         scene_paths = []
 
-        # IMPORTANT: build ONE scene at a time.
-        # The old code built four full RGBA scenes in parallel, which caused
-        # a large peak-memory spike on Railway's 1 GB service.
-        stage = time.perf_counter()
-        for index in range(4):
-            scene = _compose_video_scene(
-                base,
-                product,
-                width,
-                height,
-                index,
-                prompt,
-            )
-
+        for index, scene in enumerate(scenes):
             path = os.path.join(temp_dir, f"scene_{index + 1}.jpg")
-            scene.save(path, "JPEG", quality=88, optimize=False)
+            scene.save(path, "JPEG", quality=91, optimize=False)
             scene_paths.append(path)
-
-            try:
-                scene.close()
-            except Exception:
-                pass
-
-            del scene
-            gc.collect()
-
-        _video_log("Scene composition (sequential / low-memory)", stage)
-
-        # We no longer need the Pillow product/background while FFmpeg runs.
-        try:
-            product.close()
-        except Exception:
-            pass
-        try:
-            base.close()
-        except Exception:
-            pass
-
-        product = None
-        base = None
-        gc.collect()
 
         output_path = os.path.join(temp_dir, "cinematic_ad.mp4")
 
@@ -750,8 +718,8 @@ def generate_video_job(prompt, image_data_uri):
                 height,
             )
         except Exception as first_error:
-            print("[VIDEO] Primary low-memory FFmpeg render failed:", first_error)
-            print("[VIDEO] Trying safe static fallback render...")
+            print("[VIDEO] Primary FFmpeg render failed:", first_error)
+            print("[VIDEO] Trying safe fallback render...")
             _encode_static_video_fallback(
                 ffmpeg,
                 scene_paths,
@@ -771,8 +739,6 @@ def generate_video_job(prompt, image_data_uri):
                 f"Video output is unexpectedly small ({file_size} bytes)."
             )
 
-        # Base64 is retained because your existing main.py/frontend already
-        # expects result.video_url as a data URL.
         with open(output_path, "rb") as handle:
             encoded = base64.b64encode(handle.read()).decode("utf-8")
 
@@ -799,15 +765,6 @@ def generate_video_job(prompt, image_data_uri):
         }
 
     finally:
-        for image in (product, base):
-            if image is not None:
-                try:
-                    image.close()
-                except Exception:
-                    pass
-
-        gc.collect()
-
         if temp_dir:
             try:
                 shutil.rmtree(temp_dir, ignore_errors=True)
