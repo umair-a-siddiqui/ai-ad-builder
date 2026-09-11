@@ -13,9 +13,7 @@ app.add_middleware(
     CORSMiddleware,
     allow_origins=[
         "http://localhost:5173",
-        "http://127.0.0.1:5173",
-        "http://localhost:5174",
-        "http://127.0.0.1:5174",
+        "https://ai-ad-builder-eight.vercel.app",  # Your live Vercel URL
     ],
     allow_origin_regex=r"^https://([a-zA-Z0-9-]+\.)*vercel\.app$",
     allow_credentials=True,
