@@ -6,15 +6,14 @@ import {
   Sparkles,
   Upload,
   WandSparkles,
-  Download,
-  ExternalLink,
-  RotateCcw,
   LoaderCircle,
-  CheckCircle2,
-  XCircle,
   Layers3,
   ImagePlus,
+  Type,
 } from "lucide-react";
+
+// Local FastAPI Backend Endpoint
+const API_BASE_URL = "http://127.0.0.1:8000";
 
 function PremiumPoster({ onBack }) {
   const [productImage, setProductImage] = useState(null);
@@ -22,19 +21,18 @@ function PremiumPoster({ onBack }) {
   const [format, setFormat] = useState("Instagram Post");
   const [prompt, setPrompt] = useState("");
 
+  // New Custom Ad Text State Variables
+  const [headlineText, setHeadlineText] = useState("LEAVE AN IMPRESSION");
+  const [taglineText, setTaglineText] = useState("A signature presence made to be remembered.");
+  const [ctaText, setCtaText] = useState("DISCOVER MORE");
+
   const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState("");
   const [jobStatus, setJobStatus] = useState("");
   const [posterUrl, setPosterUrl] = useState("");
 
   const posterStyles = ["Luxury", "Minimal", "Neon", "Studio"];
-
-  const formats = [
-    "Instagram Post",
-    "Instagram Story",
-    "Square",
-    "Landscape",
-  ];
+  const formats = ["Instagram Post", "Instagram Story", "Square", "Landscape"];
 
   const imagePreview = useMemo(() => {
     if (!productImage) return "";
@@ -55,28 +53,25 @@ function PremiumPoster({ onBack }) {
 
   async function checkJobStatus(jobId) {
     while (true) {
-      await sleep(2000);
+      await sleep(1500);
 
-      const response = await fetch(
-        `https://ai-ad-builder-production.up.railway.app/job-status/${jobId}`
-      );
+      const response = await fetch(`${API_BASE_URL}/job-status/${jobId}`);
 
       if (!response.ok) {
         throw new Error("Could not check poster status.");
       }
 
       const data = await response.json();
-
       console.log("Poster job status:", data);
 
       if (data.status === "queued") {
         setJobStatus("queued");
-        setMessage("Your poster is waiting in the queue...");
+        setMessage("Your poster is waiting in queue...");
       }
 
       if (data.status === "started") {
         setJobStatus("started");
-        setMessage("Creating your premium poster...");
+        setMessage("Creating your premium poster with local engine...");
       }
 
       if (data.status === "finished") {
@@ -86,7 +81,6 @@ function PremiumPoster({ onBack }) {
         if (data.result?.poster_url) {
           setPosterUrl(data.result.poster_url);
         }
-
         return;
       }
 
@@ -94,10 +88,6 @@ function PremiumPoster({ onBack }) {
         setJobStatus("failed");
         setMessage(data.error || "Poster generation failed.");
         return;
-      }
-
-      if (data.success === false) {
-        throw new Error(data.error || "Could not get poster status.");
       }
     }
   }
@@ -110,32 +100,32 @@ function PremiumPoster({ onBack }) {
     }
 
     setLoading(true);
-    setMessage("Sending your poster request...");
+    setMessage("Sending request to local Python backend...");
     setJobStatus("queued");
     setPosterUrl("");
 
     try {
       const formData = new FormData();
-
       formData.append("poster_style", posterStyle);
       formData.append("format", format);
       formData.append("prompt", prompt);
       formData.append("product_image", productImage);
 
-      const response = await fetch(
-        "https://ai-ad-builder-production.up.railway.app/generate-premium-poster",
-        {
-          method: "POST",
-          body: formData,
-        }
-      );
+      // Append Custom Text Fields to Backend Body
+      formData.append("headline", headlineText);
+      formData.append("tagline", taglineText);
+      formData.append("cta_text", ctaText);
+
+      const response = await fetch(`${API_BASE_URL}/generate-premium-poster`, {
+        method: "POST",
+        body: formData,
+      });
 
       if (!response.ok) {
         throw new Error("Backend request failed.");
       }
 
       const data = await response.json();
-
       console.log("Poster backend response:", data);
 
       if (!data.job_id) {
@@ -143,46 +133,30 @@ function PremiumPoster({ onBack }) {
       }
 
       setJobStatus("queued");
-      setMessage("Premium poster generation job queued.");
+      setMessage("Processing poster task...");
 
       await checkJobStatus(data.job_id);
     } catch (error) {
       console.error(error);
-
       setJobStatus("failed");
-
       setMessage(
-        error.message ||
-          "Could not connect to the backend. Make sure FastAPI is running."
+        error.message || "Cannot reach FastAPI backend at " + API_BASE_URL
       );
     } finally {
       setLoading(false);
     }
   }
 
-  function resetForm() {
-    setProductImage(null);
-    setPrompt("");
-    setMessage("");
-    setJobStatus("");
-    setPosterUrl("");
-    setLoading(false);
-  }
-
   return (
     <div className="relative min-h-screen overflow-hidden bg-[#050509] text-white">
-
-      {/* Background glow */}
       <div className="pointer-events-none fixed inset-0">
         <div className="absolute -left-40 top-24 h-[500px] w-[500px] rounded-full bg-fuchsia-700/12 blur-[160px]" />
         <div className="absolute right-[-150px] top-[250px] h-[520px] w-[520px] rounded-full bg-purple-700/12 blur-[170px]" />
         <div className="absolute bottom-[-220px] left-[35%] h-[500px] w-[500px] rounded-full bg-blue-700/10 blur-[170px]" />
       </div>
 
-      {/* Navigation */}
       <nav className="relative z-20 border-b border-white/[0.06] bg-black/10 backdrop-blur-xl">
         <div className="mx-auto flex max-w-7xl items-center justify-between px-6 py-5 lg:px-8">
-
           <button
             onClick={onBack}
             className="flex items-center gap-2 text-sm text-white/45 transition hover:text-white"
@@ -195,12 +169,8 @@ function PremiumPoster({ onBack }) {
             <div className="flex h-9 w-9 items-center justify-center rounded-xl border border-fuchsia-400/20 bg-fuchsia-500/10">
               <Image size={17} className="text-fuchsia-200" />
             </div>
-
             <div>
-              <p className="text-sm font-semibold">
-                Poster Studio
-              </p>
-
+              <p className="text-sm font-semibold">Poster Studio</p>
               <p className="text-[9px] uppercase tracking-[0.22em] text-white/25">
                 AI Image Generation
               </p>
@@ -209,55 +179,28 @@ function PremiumPoster({ onBack }) {
 
           <div className="hidden items-center gap-2 text-xs text-white/30 sm:flex">
             <div className="h-2 w-2 rounded-full bg-green-400" />
-            Studio Online
+            Local Studio Connected
           </div>
-
         </div>
       </nav>
 
       <main className="relative z-10 mx-auto max-w-7xl px-6 pb-24 pt-12 lg:px-8">
-
-        {/* Heading */}
-        <motion.div
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          className="mb-10"
-        >
+        <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="mb-10">
           <div className="mb-3 flex items-center gap-2 text-xs font-medium uppercase tracking-[0.25em] text-fuchsia-300/70">
             <Sparkles size={14} />
             Visual Campaign AI
           </div>
-
           <h1 className="max-w-3xl text-4xl font-bold tracking-[-0.035em] md:text-5xl">
             Build a poster that makes your
             <span className="bg-gradient-to-r from-fuchsia-300 via-purple-300 to-blue-300 bg-clip-text text-transparent">
               {" "}product stand out.
             </span>
           </h1>
-
-          <p className="mt-4 max-w-2xl text-sm leading-7 text-white/40">
-            Upload your product, select a visual direction and generate
-            polished advertising artwork for your campaign.
-          </p>
         </motion.div>
 
-        {/* Studio Layout */}
         <div className="grid gap-6 xl:grid-cols-[430px_1fr]">
-
-          {/* LEFT PANEL */}
-          <motion.div
-            initial={{ opacity: 0, x: -20 }}
-            animate={{ opacity: 1, x: 0 }}
-            transition={{ delay: 0.1 }}
-            className="space-y-5"
-          >
-
-            {/* Upload */}
-            <StudioPanel
-              number="01"
-              title="Product"
-              subtitle="Upload your source image"
-            >
+          <motion.div initial={{ opacity: 0, x: -20 }} animate={{ opacity: 1, x: 0 }} className="space-y-5">
+            <StudioPanel number="01" title="Product" subtitle="Upload source image">
               <input
                 id="poster-product-upload"
                 type="file"
@@ -265,7 +208,6 @@ function PremiumPoster({ onBack }) {
                 className="hidden"
                 onChange={(event) => {
                   const file = event.target.files?.[0];
-
                   if (file) {
                     setProductImage(file);
                     setMessage("");
@@ -274,54 +216,63 @@ function PremiumPoster({ onBack }) {
                   }
                 }}
               />
-
               <label
                 htmlFor="poster-product-upload"
-                className="group mt-5 flex min-h-[210px] cursor-pointer items-center justify-center overflow-hidden rounded-2xl border border-dashed border-white/10 bg-black/20 p-4 transition hover:border-fuchsia-400/40 hover:bg-fuchsia-500/[0.03]"
+                className="group mt-5 flex min-h-[210px] cursor-pointer items-center justify-center overflow-hidden rounded-2xl border border-dashed border-white/10 bg-black/20 p-4 transition hover:border-fuchsia-400/40"
               >
                 {productImage ? (
                   <div className="w-full text-center">
-
-                    <img
-                      src={imagePreview}
-                      alt="Uploaded product"
-                      className="mx-auto max-h-[170px] max-w-full rounded-xl object-contain"
-                    />
-
-                    <p className="mt-3 text-xs text-white/30">
-                      Click to replace image
-                    </p>
-
+                    <img src={imagePreview} alt="Uploaded product" className="mx-auto max-h-[170px] max-w-full rounded-xl object-contain" />
+                    <p className="mt-3 text-xs text-white/30">Click to replace image</p>
                   </div>
                 ) : (
                   <div className="text-center">
-
-                    <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-2xl border border-white/10 bg-white/[0.04] transition group-hover:border-fuchsia-400/30 group-hover:bg-fuchsia-500/10">
-                      <Upload
-                        size={22}
-                        className="text-fuchsia-200"
-                      />
+                    <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-2xl border border-white/10 bg-white/[0.04]">
+                      <Upload size={22} className="text-fuchsia-200" />
                     </div>
-
-                    <p className="mt-4 text-sm font-medium">
-                      Drop your product here
-                    </p>
-
-                    <p className="mt-1 text-xs text-white/30">
-                      PNG, JPG or WEBP
-                    </p>
-
+                    <p className="mt-4 text-sm font-medium">Drop your product here</p>
                   </div>
                 )}
               </label>
             </StudioPanel>
 
-            {/* Style */}
-            <StudioPanel
-              number="02"
-              title="Visual Style"
-              subtitle="Choose your campaign direction"
-            >
+            {/* NEW PANEL: Custom Poster Copy */}
+            <StudioPanel number="02" title="Ad Copy & Text" subtitle="Customize poster overlay text">
+              <div className="mt-4 space-y-3">
+                <div>
+                  <label className="text-[11px] font-medium text-white/50">Headline</label>
+                  <input
+                    type="text"
+                    value={headlineText}
+                    onChange={(e) => setHeadlineText(e.target.value)}
+                    placeholder="e.g., LEAVE AN IMPRESSION"
+                    className="mt-1 w-full rounded-xl border border-white/[0.08] bg-black/25 px-3 py-2 text-xs text-white outline-none focus:border-fuchsia-400/40"
+                  />
+                </div>
+                <div>
+                  <label className="text-[11px] font-medium text-white/50">Tagline</label>
+                  <input
+                    type="text"
+                    value={taglineText}
+                    onChange={(e) => setTaglineText(e.target.value)}
+                    placeholder="e.g., A signature presence..."
+                    className="mt-1 w-full rounded-xl border border-white/[0.08] bg-black/25 px-3 py-2 text-xs text-white outline-none focus:border-fuchsia-400/40"
+                  />
+                </div>
+                <div>
+                  <label className="text-[11px] font-medium text-white/50">Call to Action (CTA)</label>
+                  <input
+                    type="text"
+                    value={ctaText}
+                    onChange={(e) => setCtaText(e.target.value)}
+                    placeholder="e.g., DISCOVER MORE"
+                    className="mt-1 w-full rounded-xl border border-white/[0.08] bg-black/25 px-3 py-2 text-xs text-white outline-none focus:border-fuchsia-400/40"
+                  />
+                </div>
+              </div>
+            </StudioPanel>
+
+            <StudioPanel number="03" title="Visual Style" subtitle="Campaign direction">
               <div className="mt-5 grid grid-cols-2 gap-2.5">
                 {posterStyles.map((item) => (
                   <button
@@ -330,7 +281,7 @@ function PremiumPoster({ onBack }) {
                     className={`rounded-xl border px-3 py-3 text-xs font-medium transition ${
                       posterStyle === item
                         ? "border-fuchsia-400/40 bg-fuchsia-500/10 text-fuchsia-200"
-                        : "border-white/[0.07] bg-white/[0.025] text-white/45 hover:bg-white/[0.05] hover:text-white/70"
+                        : "border-white/[0.07] bg-white/[0.025] text-white/45"
                     }`}
                   >
                     {item}
@@ -339,12 +290,7 @@ function PremiumPoster({ onBack }) {
               </div>
             </StudioPanel>
 
-            {/* Format */}
-            <StudioPanel
-              number="03"
-              title="Canvas"
-              subtitle="Choose the final poster format"
-            >
+            <StudioPanel number="04" title="Canvas" subtitle="Poster format">
               <div className="mt-5 grid grid-cols-2 gap-2.5">
                 {formats.map((item) => (
                   <button
@@ -353,7 +299,7 @@ function PremiumPoster({ onBack }) {
                     className={`rounded-xl border px-3 py-3 text-[11px] font-medium transition ${
                       format === item
                         ? "border-fuchsia-400/40 bg-fuchsia-500/10 text-fuchsia-200"
-                        : "border-white/[0.07] bg-white/[0.025] text-white/40 hover:bg-white/[0.05]"
+                        : "border-white/[0.07] bg-white/[0.025] text-white/40"
                     }`}
                   >
                     {item}
@@ -361,280 +307,92 @@ function PremiumPoster({ onBack }) {
                 ))}
               </div>
             </StudioPanel>
-
           </motion.div>
 
-          {/* RIGHT WORKSPACE */}
-          <motion.div
-            initial={{ opacity: 0, x: 20 }}
-            animate={{ opacity: 1, x: 0 }}
-            transition={{ delay: 0.15 }}
-            className="rounded-[30px] border border-white/[0.08] bg-white/[0.025] p-5 backdrop-blur-xl md:p-7"
-          >
-
-            {/* Workspace Header */}
+          <motion.div initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} className="rounded-[30px] border border-white/[0.08] bg-white/[0.025] p-5 md:p-7">
             <div className="flex flex-wrap items-center justify-between gap-4 border-b border-white/[0.06] pb-5">
-
               <div className="flex items-center gap-3">
-
                 <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-fuchsia-500/10 text-fuchsia-200">
                   <Layers3 size={19} />
                 </div>
-
                 <div>
-                  <h2 className="text-sm font-semibold">
-                    Poster Workspace
-                  </h2>
-
-                  <p className="mt-0.5 text-xs text-white/30">
-                    Campaign preview & creative direction
-                  </p>
+                  <h2 className="text-sm font-semibold">Poster Workspace</h2>
+                  <p className="mt-0.5 text-xs text-white/30">Campaign preview & creative direction</p>
                 </div>
-
               </div>
-
               <div className="rounded-full border border-white/[0.07] bg-black/20 px-3 py-1.5 text-[10px] uppercase tracking-[0.15em] text-white/30">
                 {format}
               </div>
-
             </div>
 
-            {/* Main Preview */}
             <div className="relative mt-6 flex min-h-[440px] items-center justify-center overflow-hidden rounded-[24px] border border-white/[0.07] bg-black/30">
-
-              <div className="absolute inset-0 bg-gradient-to-b from-fuchsia-500/[0.025] via-transparent to-purple-500/[0.025]" />
-
               {posterUrl ? (
-                <img
-                  src={posterUrl}
-                  alt="Generated premium poster"
-                  className="relative z-10 max-h-[560px] max-w-full object-contain"
-                />
+                <img src={posterUrl} alt="Generated premium poster" className="relative z-10 max-h-[560px] max-w-full object-contain" />
               ) : productImage ? (
                 <div className="relative z-10 flex h-full w-full items-center justify-center p-10">
-
-                  <div className="absolute h-[300px] w-[300px] rounded-full bg-fuchsia-600/10 blur-[100px]" />
-
-                  <motion.img
-                    initial={{ opacity: 0, scale: 0.92 }}
-                    animate={{ opacity: 1, scale: 1 }}
-                    src={imagePreview}
-                    alt="Product preview"
-                    className="relative z-10 max-h-[350px] max-w-[75%] rounded-2xl object-contain shadow-2xl"
-                  />
-
+                  <img src={imagePreview} alt="Product preview" className="relative z-10 max-h-[350px] max-w-[75%] rounded-2xl object-contain shadow-2xl" />
                 </div>
               ) : (
                 <div className="relative z-10 max-w-xs text-center">
-
                   <div className="mx-auto flex h-20 w-20 items-center justify-center rounded-[24px] border border-fuchsia-400/15 bg-fuchsia-500/[0.06]">
-                    <ImagePlus
-                      size={30}
-                      className="text-fuchsia-200/60"
-                    />
+                    <ImagePlus size={30} className="text-fuchsia-200/60" />
                   </div>
-
-                  <h3 className="mt-5 text-sm font-medium text-white/70">
-                    Your campaign canvas
-                  </h3>
-
-                  <p className="mt-2 text-xs leading-5 text-white/25">
-                    Upload a product to start building your AI-powered
-                    advertising poster.
-                  </p>
-
+                  <h3 className="mt-5 text-sm font-medium text-white/70">Your campaign canvas</h3>
                 </div>
               )}
-
-              <div className="absolute left-5 top-5 flex items-center gap-2 text-[9px] uppercase tracking-[0.2em] text-white/20">
-                <div className="h-1.5 w-1.5 rounded-full bg-fuchsia-300" />
-                Campaign Preview
-              </div>
-
             </div>
 
-            {/* Prompt */}
             <div className="mt-6">
-
-              <div className="flex items-center justify-between">
-
-                <div>
-                  <h3 className="text-sm font-medium">
-                    Creative Direction
-                  </h3>
-
-                  <p className="mt-1 text-xs text-white/30">
-                    Describe the advertising scene you want AI to create.
-                  </p>
-                </div>
-
-                <WandSparkles
-                  size={18}
-                  className="text-fuchsia-300/60"
-                />
-
-              </div>
-
+              <label className="text-xs text-white/50 font-medium">Background Prompt / Theme Details</label>
               <textarea
                 value={prompt}
                 onChange={(event) => setPrompt(event.target.value)}
-                placeholder="Example: Luxury skincare campaign with warm studio lighting, soft beige background, realistic shadows, elegant composition and premium commercial photography..."
-                className="mt-4 min-h-[125px] w-full resize-none rounded-2xl border border-white/[0.08] bg-black/25 p-4 text-sm leading-6 text-white outline-none transition placeholder:text-white/20 focus:border-fuchsia-400/40"
+                placeholder="Example: Luxury skincare campaign with warm studio lighting..."
+                className="mt-2 min-h-[100px] w-full resize-none rounded-2xl border border-white/[0.08] bg-black/25 p-4 text-sm text-white outline-none focus:border-fuchsia-400/40"
               />
-
             </div>
 
-            {/* Generate */}
             <button
               onClick={generatePoster}
               disabled={loading}
-              className="group mt-5 flex w-full items-center justify-center gap-2 rounded-2xl bg-gradient-to-r from-fuchsia-500 via-purple-500 to-fuchsia-500 px-5 py-4 text-sm font-semibold shadow-lg shadow-purple-950/20 transition hover:scale-[1.01] disabled:cursor-not-allowed disabled:opacity-50"
+              className="mt-5 flex w-full items-center justify-center gap-2 rounded-2xl bg-gradient-to-r from-fuchsia-500 to-purple-500 px-5 py-4 text-sm font-semibold hover:scale-[1.01]"
             >
-              {loading ? (
-                <LoaderCircle
-                  size={18}
-                  className="animate-spin"
-                />
-              ) : (
-                <WandSparkles size={17} />
-              )}
-
-              {loading
-                ? "Designing Your Poster..."
-                : "Generate Premium Poster"}
-
-              {!loading && (
-                <Sparkles
-                  size={15}
-                  className="ml-1 opacity-60"
-                />
-              )}
+              {loading ? <LoaderCircle size={18} className="animate-spin" /> : <WandSparkles size={17} />}
+              {loading ? "Designing Your Poster..." : "Generate Premium Poster"}
             </button>
 
-            {/* Status */}
             {message && (
-              <div
-                className={`mt-4 flex items-center gap-3 rounded-2xl border p-4 text-xs ${
-                  jobStatus === "failed"
-                    ? "border-red-400/15 bg-red-500/[0.05] text-red-200"
-                    : jobStatus === "finished"
-                    ? "border-green-400/15 bg-green-500/[0.05] text-green-200"
-                    : "border-fuchsia-400/15 bg-fuchsia-500/[0.05] text-fuchsia-100"
-                }`}
-              >
-
-                {(jobStatus === "queued" ||
-                  jobStatus === "started") && (
-                  <LoaderCircle
-                    size={17}
-                    className="shrink-0 animate-spin"
-                  />
-                )}
-
-                {jobStatus === "finished" && (
-                  <CheckCircle2
-                    size={17}
-                    className="shrink-0"
-                  />
-                )}
-
-                {jobStatus === "failed" && (
-                  <XCircle
-                    size={17}
-                    className="shrink-0"
-                  />
-                )}
-
+              <div className="mt-4 flex items-center gap-3 rounded-2xl border border-fuchsia-400/15 bg-fuchsia-500/[0.05] p-4 text-xs">
                 {message}
-
               </div>
             )}
 
-            {/* Result controls */}
             {posterUrl && (
-              <motion.div
-                initial={{ opacity: 0, y: 15 }}
-                animate={{ opacity: 1, y: 0 }}
-                className="mt-5"
-              >
-
-                <div className="mb-4 flex items-center gap-2 text-xs text-green-300">
-                  <CheckCircle2 size={16} />
-                  Premium poster ready
-                </div>
-
-                <div className="grid gap-3 sm:grid-cols-2">
-
-                  <a
-                    href={posterUrl}
-                    target="_blank"
-                    rel="noreferrer"
-                    className="flex items-center justify-center gap-2 rounded-xl border border-white/[0.08] bg-white/[0.03] px-4 py-3 text-sm text-white/70 transition hover:bg-white/[0.07] hover:text-white"
-                  >
-                    <ExternalLink size={16} />
-                    Open Poster
-                  </a>
-
-                  <a
-                    href={posterUrl}
-                    download="premium-product-poster.jpg"
-                    className="flex items-center justify-center gap-2 rounded-xl bg-white px-4 py-3 text-sm font-semibold text-black transition hover:scale-[1.01]"
-                  >
-                    <Download size={16} />
-                    Download
-                  </a>
-
-                </div>
-
-                <button
-                  onClick={resetForm}
-                  className="mt-3 flex w-full items-center justify-center gap-2 rounded-xl border border-white/[0.07] px-4 py-3 text-xs text-white/40 transition hover:bg-white/[0.04] hover:text-white/70"
-                >
-                  <RotateCcw size={15} />
-                  Create Another Poster
-                </button>
-
-              </motion.div>
+              <div className="mt-5 grid gap-3 sm:grid-cols-2">
+                <a href={posterUrl} target="_blank" rel="noreferrer" className="flex items-center justify-center rounded-xl border border-white/[0.08] py-3 text-sm">Open Poster</a>
+                <a href={posterUrl} download="premium-poster.jpg" className="flex items-center justify-center rounded-xl bg-white py-3 text-sm font-semibold text-black">Download</a>
+              </div>
             )}
-
           </motion.div>
-
         </div>
-
       </main>
     </div>
   );
 }
 
-
 function StudioPanel({ number, title, subtitle, children }) {
   return (
-    <div className="rounded-[24px] border border-white/[0.08] bg-white/[0.025] p-5 backdrop-blur-xl">
-
+    <div className="rounded-[24px] border border-white/[0.08] bg-white/[0.025] p-5">
       <div className="flex items-start justify-between">
-
         <div>
-          <h2 className="text-sm font-semibold">
-            {title}
-          </h2>
-
-          <p className="mt-1 text-xs text-white/30">
-            {subtitle}
-          </p>
+          <h2 className="text-sm font-semibold">{title}</h2>
+          <p className="mt-1 text-xs text-white/30">{subtitle}</p>
         </div>
-
-        <span className="text-[10px] font-medium tracking-[0.18em] text-fuchsia-300/40">
-          {number}
-        </span>
-
+        <span className="text-[10px] font-medium text-fuchsia-300/40">{number}</span>
       </div>
-
       {children}
-
     </div>
   );
 }
 
 export default PremiumPoster;
-
-

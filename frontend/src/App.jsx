@@ -2,7 +2,6 @@ import {
   ArrowRight,
   Sparkles,
   Image,
-  Film,
   FileText,
   Zap,
   WandSparkles,
@@ -14,7 +13,6 @@ import { motion } from "framer-motion";
 import { useAuth, useClerk } from "@clerk/react";
 
 import Auth from "./pages/Auth";
-import CinematicSmoke from "./pages/CinematicSmoke";
 import PremiumPoster from "./pages/PremiumPoster";
 import ProductDescription from "./pages/ProductDescription";
 
@@ -47,18 +45,6 @@ function App() {
   }
 
   // Protected pages
-  if (page === "smoke") {
-    if (!isSignedIn) {
-      return <Auth onBack={() => setPage("home")} />;
-    }
-
-    return (
-      <CinematicSmoke
-        onBack={() => setPage("home")}
-      />
-    );
-  }
-
   if (page === "poster") {
     if (!isSignedIn) {
       return <Auth onBack={() => setPage("home")} />;
@@ -221,9 +207,8 @@ function App() {
             </h1>
 
             <p className="mt-7 max-w-xl text-base leading-8 text-white/45 md:text-lg">
-              Transform a single product image into cinematic advertisements,
-              premium marketing posters, and compelling product copy —
-              powered by artificial intelligence.
+              Transform a single product image into premium marketing posters
+              and compelling product copy — powered by artificial intelligence.
             </p>
 
             <div className="mt-9 flex flex-wrap items-center gap-4">
@@ -342,11 +327,11 @@ function App() {
               }}
               className="absolute left-0 top-[110px] rounded-2xl border border-white/10 bg-black/40 px-4 py-3 text-xs shadow-xl backdrop-blur-xl"
             >
-              <Film
+              <FileText
                 size={16}
                 className="mb-2 text-purple-300"
               />
-              Cinematic AI
+              AI Copy
             </motion.div>
 
             <motion.div
@@ -381,7 +366,7 @@ function App() {
             </div>
 
             <h2 className="text-3xl font-semibold tracking-tight md:text-4xl">
-              One product. Three possibilities.
+              One product. Two powerful tools.
             </h2>
 
             <p className="mt-4 max-w-2xl text-sm leading-7 text-white/40">
@@ -397,21 +382,10 @@ function App() {
 
           </div>
 
-          <div className="grid gap-6 md:grid-cols-3">
+          <div className="grid gap-6 md:grid-cols-2">
 
             <ToolCard
               number="01"
-              icon={<Film size={25} />}
-              title="Cinematic Ad"
-              description="Transform your product into a cinematic AI advertisement with motion, atmosphere and premium visual direction."
-              label="AI VIDEO"
-              onClick={() =>
-                openProtectedPage("smoke")
-              }
-            />
-
-            <ToolCard
-              number="02"
               icon={<Image size={25} />}
               title="Premium Poster"
               description="Generate polished campaign visuals and high-impact promotional posters designed around your product."
@@ -422,7 +396,7 @@ function App() {
             />
 
             <ToolCard
-              number="03"
+              number="02"
               icon={<FileText size={25} />}
               title="Product Description"
               description="Turn your product image and details into persuasive, professional marketing copy in seconds."
@@ -463,9 +437,9 @@ function App() {
           <div className="grid gap-6 md:grid-cols-3">
 
             <FeatureCard
-              icon={<Film size={25} />}
+              icon={<Sparkles size={25} />}
               title="AI-Powered Creation"
-              description="Transform product images into cinematic advertisements, premium promotional visuals, and professional marketing content using artificial intelligence."
+              description="Transform product images into premium promotional visuals and professional marketing content using artificial intelligence."
             />
 
             <FeatureCard
@@ -513,9 +487,8 @@ function App() {
               <p className="mt-6 max-w-3xl text-sm leading-7 text-white/40 md:text-base">
                 AI Ad Builder is an intelligent creative platform designed to
                 simplify product advertising. Upload your product and use
-                specialized AI tools to create cinematic advertisements,
-                premium promotional posters, and compelling product
-                descriptions from one place.
+                specialized AI tools to create premium promotional posters
+                and compelling product descriptions from one place.
               </p>
 
               <p className="mt-4 max-w-3xl text-sm leading-7 text-white/40 md:text-base">
