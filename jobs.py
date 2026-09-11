@@ -32,7 +32,6 @@ def get_format_dimensions(format_name):
     return 1080, 1080
 
 def build_environment_prompt(style, user_prompt):
-    # Clean product keywords so AI only generates an empty display stage
     raw_prompt = user_prompt.lower() if user_prompt else ""
     for word in ["perfume", "bottle", "shoes", "shoe", "sneakers", "product", "item", "can"]:
         raw_prompt = raw_prompt.replace(word, "")
@@ -51,41 +50,41 @@ def generate_ai_environment(style, user_prompt):
     seed = random.randint(1, 999999)
     print(f"Generating Background with Seed [{seed}]: {prompt_text}")
 
-    # --- PROVIDER 1: Cloudflare Workers AI ---
+    # --- PROVIDER 1: Cloudflare Workers AI (SDXL Lightning) ---
     account_id = os.getenv("CLOUDFLARE_ACCOUNT_ID")
     token = os.getenv("CLOUDFLARE_API_TOKEN")
     if account_id and token:
         try:
-            cf_url = f"https://api.cloudflare.com/client/v4/accounts/{account_id}/ai/run/@cf/black-forest-labs/flux-1-schnell"
+            cf_url = f"https://api.cloudflare.com/client/v4/accounts/{account_id}/ai/run/@cf/bytedance/stable-diffusion-xl-lightning"
             res = requests.post(
                 cf_url,
                 headers={"Authorization": f"Bearer {token}", "Content-Type": "application/json"},
-                json={"prompt": prompt_text, "steps": 8},
+                json={"prompt": prompt_text, "num_steps": 4},
                 timeout=20,
             )
             if res.status_code == 200:
                 data = res.json()
                 encoded = data.get("result", {}).get("image")
                 if encoded:
-                    print("Successfully generated background via Cloudflare Flux.")
+                    print("Successfully generated background via Cloudflare SDXL-Lightning.")
                     return Image.open(io.BytesIO(base64.b64decode(encoded))).convert("RGBA")
             print(f"Cloudflare AI Error ({res.status_code}): {res.text}")
         except Exception as e:
             print(f"Cloudflare Exception: {e}")
 
-    # --- PROVIDER 2: Hugging Face (SDXL Turbo) ---
+    # --- PROVIDER 2: Hugging Face (SD 2.1) ---
     hf_token = os.getenv("HF_TOKEN")
     if hf_token:
         try:
-            hf_url = "https://router.huggingface.co/hf-inference/models/stabilityai/sdxl-turbo"
+            hf_url = "https://router.huggingface.co/hf-inference/models/stabilityai/stable-diffusion-2-1"
             res = requests.post(
                 hf_url,
                 headers={"Authorization": f"Bearer {hf_token}", "Content-Type": "application/json"},
                 json={"inputs": prompt_text},
                 timeout=25,
             )
-            if res.status_code == 200:
-                print("Successfully generated background via Hugging Face SDXL Turbo.")
+            if res.status_code == 200 and res.content:
+                print("Successfully generated background via Hugging Face SD 2.1.")
                 return Image.open(io.BytesIO(res.content)).convert("RGBA")
             print(f"HuggingFace Error ({res.status_code}): {res.text}")
         except Exception as e:
@@ -152,7 +151,6 @@ def add_advertising_text(canvas, headline=None, tagline=None, cta_text=None):
     width, height = canvas.size
     draw = ImageDraw.Draw(canvas)
     
-    # Defaults if user input is empty
     headline = (headline or "LEAVE AN IMPRESSION").upper()
     tagline = tagline or "A signature presence made to be remembered."
     cta_text = (cta_text or "DISCOVER MORE").upper()
@@ -164,26 +162,21 @@ def add_advertising_text(canvas, headline=None, tagline=None, cta_text=None):
     text_x = int(width * 0.08)
     text_y = int(height * 0.08)
 
-    # Headline with Drop Shadow
     draw.text((text_x + 3, text_y + 3), headline, font=headline_font, fill=(0, 0, 0, 230))
     draw.text((text_x, text_y), headline, font=headline_font, fill=(255, 255, 255, 255))
     
-    # Tagline
     tag_y = text_y + 85
     draw.text((text_x + 2, tag_y + 2), tagline, font=tagline_font, fill=(0, 0, 0, 200))
     draw.text((text_x, tag_y), tagline, font=tagline_font, fill=(240, 240, 240, 255))
 
-    # CTA Button
     cta_y = tag_y + 55
     
-    # Calculate button width based on text length
     bbox = cta_font.getbbox(cta_text)
     text_width = bbox[2] - bbox[0]
     btn_width = max(220, text_width + 48)
 
     draw.rounded_rectangle((text_x, cta_y, text_x + btn_width, cta_y + 52), radius=12, fill=(225, 185, 105, 255))
     draw.text((text_x + 24, cta_y + 12), cta_text, font=cta_font, fill=(15, 15, 15, 255))
-
 
 def generate_poster_job(poster_style, format, prompt, image_data_uri, headline=None, tagline=None, cta_text=None):
     try:
@@ -206,14 +199,12 @@ def generate_poster_job(poster_style, format, prompt, image_data_uri, headline=N
         product = product.resize((int(pw * scale), int(ph * scale)), Image.Resampling.LANCZOS)
         pw, ph = product.size
 
-        # Position product centrally on pedestal base
         x = int((width - pw) / 2)
         y = int(height * 0.40)
 
         add_contact_shadow(canvas, product, x, y)
         canvas.alpha_composite(product, (x, y))
         
-        # Render custom or default text
         add_advertising_text(canvas, headline=headline, tagline=tagline, cta_text=cta_text)
 
         final_image = canvas.convert("RGB")
